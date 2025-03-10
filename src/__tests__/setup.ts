@@ -9,7 +9,11 @@ jest.mock('dockerode', () => {
     start: jest.fn().mockReturnValue(Promise.resolve()),
     stop: jest.fn().mockReturnValue(Promise.resolve()),
     remove: jest.fn().mockReturnValue(Promise.resolve()),
-    inspect: jest.fn().mockReturnValue(Promise.resolve({})),
+    inspect: jest.fn().mockResolvedValue({
+      State: {
+        Running: true
+      }
+    }),
     logs: jest.fn().mockReturnValue(Promise.resolve({})),
     modem: {},
     rename: jest.fn(),
@@ -58,7 +62,7 @@ jest.mock('child_process', () => ({
     } as unknown as ChildProcess & { on: jest.Mock };
 
     // Set up the close event handler
-    // @ts-ignore - Mock implementation is correct at runtime
+    // @ts-expect-error - Mock implementation uses jest.Mock type
     (mockProcess.on as jest.Mock).mockImplementation((event: string, handler: (code: number) => void) => {
       if (event === 'close') {
         handler(0);

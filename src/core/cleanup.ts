@@ -7,6 +7,10 @@ export interface Resource {
   type: 'docker' | 'process';
 }
 
+interface CleanupOptions {
+  shouldExit?: boolean;
+}
+
 export class CleanupManager {
   private static resources: Resource[] = [];
   private static isShuttingDown = false;
@@ -14,19 +18,19 @@ export class CleanupManager {
   private static shouldExit = true;
   private static cleanupPromise: Promise<void> | null = null;
 
-  static initialize(options: { shouldExit?: boolean } = {}) {
+  static initialize(options: CleanupOptions = {}): void {
     this.shouldExit = options.shouldExit ?? true;
     this.docker = new Docker();
+    
     process.on('SIGINT', () => this.triggerCleanup('SIGINT'));
     process.on('SIGTERM', () => this.triggerCleanup('SIGTERM'));
-    process.on('uncaughtException', (error) => {
+    process.on('uncaughtException', (error: Error) => {
       Logger.error(`Uncaught exception: ${error.message}`);
       this.triggerCleanup('uncaughtException');
     });
   }
 
-  static registerContainer(containerId: string) {
-    const container = this.docker.getContainer(containerId);
+  static registerContainer(containerId: string): void {
     this.resources.push({
       type: 'docker',
       id: containerId,
@@ -34,7 +38,7 @@ export class CleanupManager {
     });
   }
 
-  static registerProcess(processId: number) {
+  static registerProcess(processId: number): void {
     this.resources.push({
       type: 'process',
       id: processId.toString(),
@@ -42,7 +46,7 @@ export class CleanupManager {
     });
   }
 
-  static async triggerCleanup(signal: string) {
+  static async triggerCleanup(signal: string): Promise<void> {
     if (this.isShuttingDown) return;
     this.isShuttingDown = true;
 
@@ -54,7 +58,11 @@ export class CleanupManager {
     try {
       // Clean up resources in reverse order
       this.cleanupPromise = Promise.all(
-        resourcesToCleanup.map(resource => resource.type === 'docker' ? this.cleanupDockerContainer(resource.id) : this.cleanupProcess(resource.id))
+        resourcesToCleanup.map(resource => 
+          resource.type === 'docker' 
+            ? this.cleanupDockerContainer(resource.id) 
+            : this.cleanupProcess(resource.id)
+        )
       ).then(() => {
         Logger.success('Cleanup completed');
         if (this.shouldExit) {
@@ -64,7 +72,8 @@ export class CleanupManager {
 
       await this.cleanupPromise;
     } catch (error) {
-      Logger.error(`Cleanup failed: ${error instanceof Error ? error.message : String(error)}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      Logger.error(`Cleanup failed: ${errorMessage}`);
       if (this.shouldExit) {
         process.exit(1);
       }
@@ -74,22 +83,52 @@ export class CleanupManager {
   static async cleanupDockerContainer(containerId: string): Promise<void> {
     const container = this.docker.getContainer(containerId);
     try {
-      await container.stop();
+      const containerInfo = await container.inspect();
+      if (containerInfo.State?.Running) {
+        await container.stop();
+        Logger.success(`Stopped container ${containerId}`);
+      } else {
+        Logger.warn(`Container ${containerId} is not running`);
+      }
       await container.remove();
       Logger.success(`Removed container ${containerId}`);
     } catch (error) {
-      Logger.error(`Failed to cleanup container ${containerId}: ${error instanceof Error ? error.message : String(error)}`);
-      throw error; // Re-throw to ensure proper error handling
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('no such container')) {
+        Logger.warn(`Container ${containerId} does not exist`);
+        return;
+      }
+      Logger.error(`Failed to cleanup container ${containerId}: ${errorMessage}`);
+      throw error;
     }
   }
 
   static async cleanupProcess(processId: string): Promise<void> {
+    const pid = parseInt(processId, 10);
     try {
-      process.kill(parseInt(processId));
-      Logger.success(`Terminated process ${processId}`);
-    } catch (error) {
-      Logger.error(`Failed to terminate process ${processId}: ${error instanceof Error ? error.message : String(error)}`);
-      throw error; // Re-throw to ensure proper error handling
+      // First check if process exists with signal 0
+      process.kill(pid, 0);
+      try {
+        // Then attempt to terminate it with default signal (SIGTERM)
+        process.kill(pid);
+        Logger.success(`Terminated process ${processId}`);
+      } catch (killError) {
+        // If kill fails with ESRCH, process doesn't exist anymore
+        if (killError instanceof Error && 'code' in killError && killError.code === 'ESRCH') {
+          Logger.warn(`Process ${processId} not found during termination`);
+          return;
+        }
+        throw killError;
+      }
+    } catch (checkError) {
+      // If existence check fails with ESRCH, process doesn't exist
+      if (checkError instanceof Error && 'code' in checkError && checkError.code === 'ESRCH') {
+        Logger.warn(`Process ${processId} not found`);
+        return;
+      }
+      const errorMessage = checkError instanceof Error ? checkError.message : String(checkError);
+      Logger.error(`Failed to terminate process ${processId}: ${errorMessage}`);
+      throw checkError;
     }
   }
 
@@ -110,7 +149,7 @@ export class CleanupManager {
   }
 
   // For testing purposes only
-  static reset() {
+  static reset(): void {
     this.resources = [];
     this.isShuttingDown = false;
     this.cleanupPromise = null;
@@ -118,7 +157,7 @@ export class CleanupManager {
   }
 
   // For testing purposes only
-  static async waitForCleanup() {
+  static async waitForCleanup(): Promise<void> {
     if (this.cleanupPromise) {
       await this.cleanupPromise;
     }

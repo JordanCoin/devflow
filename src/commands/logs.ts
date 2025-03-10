@@ -1,4 +1,4 @@
-import { Container, ContainerLogsOptions } from 'dockerode';
+import { Container } from 'dockerode';
 import { Readable } from 'stream';
 import { Logger } from '../core/logger';
 import { CleanupManager } from '../core/cleanup';

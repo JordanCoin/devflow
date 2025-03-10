@@ -3,21 +3,22 @@ import ora from 'ora';
 
 export class Logger {
   private static spinner = ora();
+  private static readonly debugEnabled = process.env.DEBUG === 'true';
 
   static info(message: string): void {
-    console.log(chalk.blue('ℹ'), message);
+    process.stdout.write(`${chalk.blue('ℹ')} ${message}\n`);
   }
 
   static success(message: string): void {
-    console.log(chalk.green('✓'), message);
+    process.stdout.write(`${chalk.green('✓')} ${message}\n`);
   }
 
   static error(message: string): void {
-    console.error(chalk.red('✖'), message);
+    process.stderr.write(`${chalk.red('✖')} ${message}\n`);
   }
 
   static warn(message: string): void {
-    console.warn(chalk.yellow('⚠'), message);
+    process.stderr.write(`${chalk.yellow('⚠')} ${message}\n`);
   }
 
   static startSpinner(message: string): void {
@@ -33,8 +34,8 @@ export class Logger {
   }
 
   static debug(message: string): void {
-    if (process.env.DEBUG) {
-      console.log(chalk.gray('🔍'), message);
+    if (this.debugEnabled) {
+      process.stdout.write(`${chalk.gray('🔍')} ${message}\n`);
     }
   }
 } 
