@@ -1,0 +1,67 @@
+{
+  "name": "devflow",
+  "version": "1.0.0",
+  "description": "CLI Test Environment Automation Tool",
+  "main": "dist/index.js",
+  "bin": {
+    "devflow": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "lint": "eslint src/**/*.ts",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm run test && npm run lint",
+    "publish:patch": "npm version patch && npm publish",
+    "publish:minor": "npm version minor && npm publish",
+    "publish:major": "npm version major && npm publish"
+  },
+  "keywords": [
+    "cli",
+    "automation",
+    "testing",
+    "docker",
+    "workflow",
+    "devops",
+    "development",
+    "testing-tools"
+  ],
+  "author": "Jordan Jackson",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jordanjackson/devflow.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jordanjackson/devflow/issues"
+  },
+  "homepage": "https://github.com/jordanjackson/devflow#readme",
+  "dependencies": {
+    "@types/dotenv": "^6.1.1",
+    "@types/node": "^22.13.10",
+    "chalk": "^4.1.2",
+    "commander": "^13.1.0",
+    "dockerode": "^4.0.2",
+    "dotenv": "^16.4.7",
+    "inquirer": "^8.2.6",
+    "ora": "^5.4.1",
+    "typescript": "^5.8.2",
+    "yaml": "^2.7.0"
+  },
+  "devDependencies": {
+    "@types/dockerode": "^3.3.23",
+    "@types/inquirer": "^8.2.10",
+    "@types/jest": "^29.5.14",
+    "@types/yaml": "^1.9.7",
+    "@typescript-eslint/eslint-plugin": "^7.1.0",
+    "@typescript-eslint/parser": "^7.1.0",
+    "eslint": "^8.57.0",
+    "jest": "^29.7.0",
+    "nodemon": "^3.1.9",
+    "ts-jest": "^29.1.2",
+    "ts-node": "^10.9.2"
+  }
+}

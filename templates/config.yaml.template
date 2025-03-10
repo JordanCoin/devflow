@@ -1,0 +1,40 @@
+# DevFlow Configuration
+project_name: example-project
+version: 1.0.0
+
+workflows:
+  test:
+    name: Test
+    description: Run tests with database
+    tasks:
+      - name: Start Database
+        type: docker
+        image: postgres:13
+        container_name: test-db
+        env:
+          POSTGRES_PASSWORD: test123
+          POSTGRES_DB: testdb
+
+      - name: Run Tests
+        type: command
+        command: npm test
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_PASSWORD: test123
+
+  local_dev:
+    name: Local Development
+    description: Set up local development environment
+    tasks:
+      - name: Start Redis
+        type: docker
+        image: redis:6
+        container_name: cache
+
+      - name: Start Backend
+        type: command
+        command: npm run dev
+        env:
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379 

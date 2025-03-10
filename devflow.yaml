@@ -1,0 +1,63 @@
+# DevFlow Configuration
+project_name: test project
+version: 1.0.0
+
+workflows:
+  # Development workflow
+  dev:
+    name: Development Environment
+    description: Set up local development environment
+    tasks:
+      - name: Start Database
+        type: docker
+        image: postgres:13
+        container_name: dev-db
+        env:
+          POSTGRES_PASSWORD: devpass
+          POSTGRES_DB: devdb
+
+      - name: Start Redis Cache
+        type: docker
+        image: redis:6
+        container_name: dev-cache
+
+      - name: Run Development Server
+        type: command
+        command: npm run dev
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_PASSWORD: devpass
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+
+  # Testing workflow
+  test:
+    name: Run Tests
+    description: Run the test suite with dependencies
+    tasks:
+      - name: Start Test Database
+        type: docker
+        image: postgres:13
+        container_name: test-db
+        env:
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: testdb
+
+      - name: Run Tests
+        type: command
+        command: npm test
+        env:
+          NODE_ENV: test
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_PASSWORD: testpass
+
+  # Cleanup workflow
+  cleanup:
+    name: Cleanup
+    description: Clean up all development containers
+    tasks:
+      - name: Stop All Containers
+        type: command
+        command: docker stop dev-db dev-cache test-db || true 

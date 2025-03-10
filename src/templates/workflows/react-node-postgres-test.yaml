@@ -1,0 +1,81 @@
+project_name: react-node-postgres-test
+version: 1.0.0
+
+workflows:
+  test:
+    name: React + Node + Postgres Tests
+    description: Run end-to-end tests for a React + Node + Postgres application
+    tasks:
+      - name: Start Database
+        type: docker
+        image: postgres:13
+        container_name: test-db
+        env:
+          POSTGRES_PASSWORD: test123
+          POSTGRES_DB: testdb
+        health_check:
+          type: tcp
+          host: localhost
+          port: 5432
+          retries: 5
+          interval: 2000
+          timeout: 5000
+
+      - name: Start Redis Cache
+        type: docker
+        image: redis:6
+        container_name: test-cache
+        health_check:
+          type: tcp
+          host: localhost
+          port: 6379
+          retries: 3
+          interval: 1000
+          timeout: 3000
+
+      - name: Start Backend API
+        type: docker
+        image: backend-api:test
+        container_name: test-api
+        env:
+          DB_HOST: test-db
+          DB_PORT: 5432
+          DB_PASSWORD: test123
+          REDIS_HOST: test-cache
+          REDIS_PORT: 6379
+        depends_on: ["Start Database", "Start Redis Cache"]
+        health_check:
+          type: http
+          host: localhost
+          port: 3000
+          path: /health
+          retries: 5
+          interval: 2000
+          timeout: 5000
+
+      - name: Start Frontend Dev Server
+        type: command
+        command: npm run dev
+        env:
+          API_URL: http://localhost:3000
+        depends_on: ["Start Backend API"]
+
+      - name: Run E2E Tests
+        type: command
+        command: npm run test:e2e
+        env:
+          TEST_API_URL: http://localhost:3000
+          TEST_DB_URL: postgresql://postgres:test123@localhost:5432/testdb
+        depends_on: ["Start Frontend Dev Server"]
+
+      - name: Run API Tests
+        type: command
+        command: npm run test:api
+        env:
+          TEST_DB_URL: postgresql://postgres:test123@localhost:5432/testdb
+        depends_on: ["Start Backend API"]
+
+      - name: Run Frontend Unit Tests
+        type: command
+        command: npm run test:unit
+        parallel: true 

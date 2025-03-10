@@ -1,0 +1,45 @@
+project_name: microservices-example
+version: 1.0.0
+
+workflows:
+  dev:
+    name: Local Development
+    description: Start microservices development environment
+    parallel: true  # Run tasks in parallel when possible
+    tasks:
+      - name: Start Redis
+        type: docker
+        image: redis:6
+        container_name: cache
+      
+      - name: Start Postgres
+        type: docker
+        image: postgres:13
+        container_name: db
+        env:
+          POSTGRES_PASSWORD: dev123
+          POSTGRES_DB: microservices
+      
+      - name: Start Auth Service
+        type: docker
+        image: auth-service:local
+        container_name: auth
+        depends_on: ["Start Redis"]  # Depends on Redis being ready
+        env:
+          REDIS_HOST: cache
+          REDIS_PORT: 6379
+      
+      - name: Start API Gateway
+        type: docker
+        image: api-gateway:local
+        container_name: gateway
+        depends_on: ["Start Auth Service"]  # Depends on Auth Service being ready
+        env:
+          AUTH_SERVICE_URL: http://auth:3000
+      
+      - name: Start Frontend Dev Server
+        type: command
+        command: npm run dev
+        parallel: true  # Run independently of other services
+        env:
+          API_URL: http://localhost:8080 

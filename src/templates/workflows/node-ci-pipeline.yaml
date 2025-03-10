@@ -1,0 +1,88 @@
+project_name: node-ci-pipeline
+version: 1.0.0
+
+workflows:
+  ci:
+    name: Node.js CI Pipeline
+    description: Simulate a production CI/CD pipeline for Node.js applications
+    tasks:
+      - name: Lint Code
+        type: command
+        command: npm run lint
+        parallel: true
+
+      - name: Run TypeScript Compilation
+        type: command
+        command: npm run build
+        parallel: true
+
+      - name: Run Unit Tests
+        type: command
+        command: npm run test:unit
+        parallel: true
+
+      - name: Start Test Database
+        type: docker
+        image: postgres:13
+        container_name: ci-test-db
+        env:
+          POSTGRES_PASSWORD: test123
+          POSTGRES_DB: testdb
+        health_check:
+          type: tcp
+          host: localhost
+          port: 5432
+          retries: 3
+          interval: 1000
+          timeout: 3000
+
+      - name: Run Integration Tests
+        type: command
+        command: npm run test:integration
+        env:
+          TEST_DB_URL: postgresql://postgres:test123@localhost:5432/testdb
+        depends_on: ["Start Test Database"]
+
+      - name: Build Docker Image
+        type: command
+        command: docker build -t myapp:test .
+        depends_on: ["Run TypeScript Compilation"]
+
+      - name: Run Container Tests
+        type: docker
+        image: myapp:test
+        container_name: ci-test-app
+        env:
+          NODE_ENV: test
+          DB_URL: postgresql://postgres:test123@ci-test-db:5432/testdb
+        depends_on: ["Build Docker Image", "Start Test Database"]
+        health_check:
+          type: http
+          host: localhost
+          port: 3000
+          path: /health
+          retries: 5
+          interval: 2000
+          timeout: 5000
+
+      - name: Run Security Scan
+        type: command
+        command: npm run security:scan
+        parallel: true
+
+      - name: Generate Coverage Report
+        type: command
+        command: npm run test:coverage
+        parallel: true
+
+      - name: Deploy to Staging
+        type: command
+        command: npm run deploy:staging
+        depends_on: [
+          "Lint Code",
+          "Run TypeScript Compilation",
+          "Run Unit Tests",
+          "Run Integration Tests",
+          "Run Container Tests",
+          "Run Security Scan"
+        ] 

@@ -1,0 +1,118 @@
+project_name: node-microservices-dev
+version: 1.0.0
+
+workflows:
+  dev:
+    name: Node.js Microservices Development
+    description: Set up a complete development environment for Node.js microservices
+    tasks:
+      - name: Install Dependencies
+        type: command
+        command: npm install
+        parallel: true
+
+      - name: Start Development Database
+        type: docker
+        image: postgres:13
+        container_name: dev-db
+        env:
+          POSTGRES_PASSWORD: devpass
+          POSTGRES_DB: devdb
+        health_check:
+          type: tcp
+          host: localhost
+          port: 5432
+          retries: 3
+          interval: 1000
+          timeout: 3000
+
+      - name: Start Redis Cache
+        type: docker
+        image: redis:6
+        container_name: dev-cache
+        health_check:
+          type: tcp
+          host: localhost
+          port: 6379
+          retries: 3
+          interval: 1000
+          timeout: 3000
+
+      - name: Start RabbitMQ
+        type: docker
+        image: rabbitmq:3-management
+        container_name: dev-rabbitmq
+        env:
+          RABBITMQ_DEFAULT_USER: devuser
+          RABBITMQ_DEFAULT_PASS: devpass
+        health_check:
+          type: tcp
+          host: localhost
+          port: 5672
+          retries: 5
+          interval: 2000
+          timeout: 5000
+
+      - name: Start Elasticsearch
+        type: docker
+        image: elasticsearch:7.9.3
+        container_name: dev-elasticsearch
+        env:
+          discovery.type: single-node
+          ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+        health_check:
+          type: http
+          host: localhost
+          port: 9200
+          path: /_cluster/health
+          retries: 5
+          interval: 2000
+          timeout: 5000
+
+      - name: Run Database Migrations
+        type: command
+        command: npm run db:migrate
+        env:
+          DB_URL: postgresql://postgres:devpass@localhost:5432/devdb
+        depends_on: ["Start Development Database"]
+
+      - name: Seed Development Data
+        type: command
+        command: npm run db:seed
+        env:
+          DB_URL: postgresql://postgres:devpass@localhost:5432/devdb
+        depends_on: ["Run Database Migrations"]
+
+      - name: Start Backend API
+        type: command
+        command: npm run dev:api
+        env:
+          DB_URL: postgresql://postgres:devpass@localhost:5432/devdb
+          REDIS_URL: redis://localhost:6379
+          RABBITMQ_URL: amqp://devuser:devpass@localhost:5672
+          ELASTICSEARCH_URL: http://localhost:9200
+        depends_on: [
+          "Start Development Database",
+          "Start Redis Cache",
+          "Start RabbitMQ",
+          "Start Elasticsearch",
+          "Run Database Migrations",
+          "Seed Development Data"
+        ]
+
+      - name: Start Frontend Dev Server
+        type: command
+        command: npm run dev:frontend
+        env:
+          API_URL: http://localhost:3000
+        depends_on: ["Start Backend API"]
+
+      - name: Start Storybook
+        type: command
+        command: npm run storybook
+        parallel: true
+
+      - name: Start API Documentation
+        type: command
+        command: npm run docs:serve
+        parallel: true 

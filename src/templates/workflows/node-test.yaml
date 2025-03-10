@@ -1,0 +1,27 @@
+project_name: node-test-example
+version: 1.0.0
+
+workflows:
+  test_db:
+    name: Test with Database
+    description: Run Node.js tests with Postgres database
+    tasks:
+      - name: Start Postgres
+        type: docker
+        image: postgres:13
+        container_name: test-db
+        env:
+          POSTGRES_PASSWORD: test123
+          POSTGRES_DB: testdb
+          POSTGRES_USER: test
+        
+      - name: Install Dependencies
+        type: command
+        command: npm install
+        
+      - name: Run Tests
+        type: command
+        command: npm test
+        env:
+          DATABASE_URL: postgresql://test:test123@localhost:5432/testdb
+          NODE_ENV: test 

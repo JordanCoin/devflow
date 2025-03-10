@@ -1,0 +1,107 @@
+project_name: react-node-postgres
+version: 1.0.0
+
+workflows:
+  dev:
+    name: Development Environment
+    description: Start development environment for React + Node + Postgres app
+    tasks:
+      - name: Start Postgres
+        type: docker
+        image: postgres:13
+        container_name: app-db
+        env:
+          POSTGRES_PASSWORD: devpass
+          POSTGRES_DB: appdb
+        health_check:
+          type: tcp
+          host: localhost
+          port: 5432
+          retries: 3
+          interval: 1000
+          timeout: 3000
+
+      - name: Install Backend Dependencies
+        type: command
+        command: cd backend && npm install
+        parallel: true
+
+      - name: Install Frontend Dependencies
+        type: command
+        command: cd frontend && npm install
+        parallel: true
+
+      - name: Run Database Migrations
+        type: command
+        command: cd backend && npm run db:migrate
+        env:
+          DATABASE_URL: postgresql://postgres:devpass@localhost:5432/appdb
+        depends_on: ["Start Postgres"]
+
+      - name: Start Backend API
+        type: command
+        command: cd backend && npm run dev
+        env:
+          DATABASE_URL: postgresql://postgres:devpass@localhost:5432/appdb
+          PORT: 3001
+        depends_on: ["Run Database Migrations"]
+
+      - name: Start Frontend Dev Server
+        type: command
+        command: cd frontend && npm run dev
+        env:
+          VITE_API_URL: http://localhost:3001
+        depends_on: ["Start Backend API"]
+
+  test:
+    name: Run Tests
+    description: Run all tests for React + Node + Postgres app
+    tasks:
+      - name: Start Test Database
+        type: docker
+        image: postgres:13
+        container_name: test-db
+        env:
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: testdb
+        health_check:
+          type: tcp
+          host: localhost
+          port: 5432
+          retries: 3
+          interval: 1000
+          timeout: 3000
+
+      - name: Run Backend Tests
+        type: command
+        command: cd backend && npm test
+        env:
+          DATABASE_URL: postgresql://postgres:testpass@localhost:5432/testdb
+          NODE_ENV: test
+        depends_on: ["Start Test Database"]
+
+      - name: Run Frontend Tests
+        type: command
+        command: cd frontend && npm test
+        parallel: true
+
+  build:
+    name: Build for Production
+    description: Build the application for production deployment
+    tasks:
+      - name: Build Backend
+        type: command
+        command: cd backend && npm run build
+        parallel: true
+
+      - name: Build Frontend
+        type: command
+        command: cd frontend && npm run build
+        parallel: true
+
+      - name: Build Docker Images
+        type: command
+        command: |
+          docker build -t app-backend:prod ./backend
+          docker build -t app-frontend:prod ./frontend
+        depends_on: ["Build Backend", "Build Frontend"] 
