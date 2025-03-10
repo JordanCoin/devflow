@@ -1,6 +1,5 @@
 import { jest } from '@jest/globals';
 import { ChildProcess } from 'child_process';
-import Docker from 'dockerode';
 
 type MockContainer = {
   id: string;
@@ -9,7 +8,7 @@ type MockContainer = {
   remove: jest.Mock;
   inspect: jest.Mock;
   logs: jest.Mock;
-  modem: {};
+  modem: Record<string, never>;
   rename: jest.Mock;
   update: jest.Mock;
   top: jest.Mock;
@@ -50,7 +49,7 @@ jest.mock('dockerode', () => {
       Name: '/test-container',
       State: {
         Running: true,
-        Status: "running",
+        Status: 'running',
         Pid: 1234
       }
     }),

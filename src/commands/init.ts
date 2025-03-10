@@ -1,66 +1,64 @@
-import { writeFileSync } from 'fs';
-import { join } from 'path';
 import inquirer from 'inquirer';
 import { Logger } from '../core/logger';
+import { DevFlowConfig, TaskType, Workflow, Task } from '../types';
+import { writeFileSync } from 'fs';
 
 export async function initCommand(): Promise<void> {
-  try {
-    const answers = await inquirer.prompt([
-      {
-        type: 'input',
-        name: 'project_name',
-        message: 'What is your project name?',
-        validate: (input: string) => input.length > 0 || 'Project name is required'
-      },
-      {
-        type: 'input',
-        name: 'workflow_name',
-        message: 'Name of your first workflow?',
-        default: 'test'
-      }
-    ]);
+  const answers = await inquirer.prompt([
+    {
+      type: 'input',
+      name: 'project_name',
+      message: 'What is your project name?',
+      default: 'my-project'
+    },
+    {
+      type: 'input',
+      name: 'workflow_name',
+      message: 'What would you like to name your first workflow?',
+      default: 'test'
+    }
+  ]);
 
-    const config = {
-      project_name: answers.project_name,
-      version: '1.0.0',
-      workflows: {
-        [answers.workflow_name]: {
-          name: answers.workflow_name,
-          description: 'Default workflow',
-          tasks: [
-            {
-              name: 'Example Task',
-              type: 'command',
-              command: 'echo "Hello from DevFlow!"'
-            }
-          ]
-        }
-      }
-    };
+  const task: Task = {
+    name: 'Example Task',
+    type: 'command' as TaskType,
+    command: 'echo "Hello World"'
+  };
 
-    const configPath = join(process.cwd(), 'devflow.yaml');
-    writeFileSync(configPath, generateYaml(config));
+  const workflow: Workflow = {
+    name: answers.workflow_name,
+    description: 'Initial workflow',
+    tasks: [task]
+  };
 
-    Logger.success('Created DevFlow configuration');
-    Logger.info(`Edit ${configPath} to customize your workflows`);
-  } catch (error) {
-    Logger.error(`Failed to initialize: ${error instanceof Error ? error.message : String(error)}`);
-    process.exit(1);
-  }
+  const config: DevFlowConfig = {
+    project_name: answers.project_name,
+    version: '1.0.0',
+    workflows: {
+      [answers.workflow_name]: workflow
+    }
+  };
+
+  const yaml = generateYaml(config);
+  writeFileSync('devflow.yaml', yaml);
+  Logger.success('Created devflow.yaml');
 }
 
-function generateYaml(config: any): string {
+function generateYaml(config: DevFlowConfig): string {
+  const workflow = config.workflows[Object.keys(config.workflows)[0]];
+  const task = workflow.tasks[0];
+  
   return `# DevFlow Configuration
 project_name: ${config.project_name}
 version: ${config.version}
 
 workflows:
-  ${config.workflows[Object.keys(config.workflows)[0]].name}:
-    name: ${config.workflows[Object.keys(config.workflows)[0]].name}
-    description: ${config.workflows[Object.keys(config.workflows)[0]].description}
+  ${workflow.name}:
+    name: ${workflow.name}
+    description: ${workflow.description}
     tasks:
-      - name: ${config.workflows[Object.keys(config.workflows)[0]].tasks[0].name}
-        type: ${config.workflows[Object.keys(config.workflows)[0]].tasks[0].type}
-        command: ${config.workflows[Object.keys(config.workflows)[0]].tasks[0].command}
+      - name: ${task.name}
+        type: ${task.type}
+        command: ${task.command}
 `;
 } 
