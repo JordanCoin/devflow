@@ -12,7 +12,7 @@ We take the security of DevFlow seriously. If you believe you have found a secur
 
 **Please do not report security vulnerabilities through public GitHub issues.**
 
-Instead, please report them via email to [INSERT SECURITY EMAIL].
+Instead, please report them via email to jordancoinjackson@gmail.com.
 
 You should receive a response within 48 hours. If for some reason you do not, please follow up via email to ensure we received your original message.
 
