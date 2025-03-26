@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2024-03-30
+
+### Added
+- Comprehensive security scanning workflows
+- Security documentation and guidelines
+- Dependency protection measures
+- CodeQL analysis integration
+- Secure logging utilities
+- Security-focused test suite
+
+### Changed
+- Enhanced error handling with suggestions
+- Improved TypeScript module resolution
+- Updated package structure for better global installation
+- Strengthened environment validation
+- Enhanced service detection reliability
+
+### Security
+- Added automated dependency review
+- Implemented secret scanning
+- Added container image scanning
+- Enhanced secure logging implementation
+- Added security best practices documentation
+
 ## [1.1.0] - 2024-03-21
 
 ### Added
