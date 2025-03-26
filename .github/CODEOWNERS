@@ -1,0 +1,26 @@
+# This file defines code ownership and review requirements
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# These owners will be the default owners for everything in the repo
+* @jordanjackson
+
+# Security-critical files that require security team review
+/src/utils/security.ts @jordanjackson @security-team
+/src/utils/logging.ts @jordanjackson @security-team
+/scripts/security-check.js @jordanjackson @security-team
+/sonar-project.properties @jordanjackson @security-team
+/.snyk @jordanjackson @security-team
+/.github/workflows/ @jordanjackson @devops-team
+
+# Package dependencies - require security review
+package.json @jordanjackson @security-team
+package-lock.json @jordanjackson @security-team
+
+# Core execution engine
+/src/core/executor.ts @jordanjackson @core-team
+
+# Documentation
+/docs/ @jordanjackson @docs-team
+
+# Templates
+/src/templates/ @jordanjackson @templates-team 

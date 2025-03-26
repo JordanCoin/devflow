@@ -1,11 +1,11 @@
 import { TaskExecutor } from '../../core/executor';
 import { Workflow, Task, ExecutionContext } from '../../types';
-import { Logger } from '../../core/logger';
+import * as logging from '../../utils/logging';
 import Docker from 'dockerode';
 
 // Mock dependencies
 jest.mock('dockerode');
-jest.mock('../../core/logger');
+jest.mock('../../utils/logging');
 
 describe('TaskExecutor - Parallel Execution', () => {
   let executor: TaskExecutor;
@@ -25,7 +25,7 @@ describe('TaskExecutor - Parallel Execution', () => {
       workflowName: 'test',
       env: {},
       cwd: process.cwd(),
-      logger: Logger
+      logger: logging
     };
   });
 

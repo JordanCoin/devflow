@@ -1,4 +1,4 @@
-import { Logger } from '../core/logger';
+import * as logging from '../utils/logging';
 
 export type TaskType = 'command' | 'docker';
 
@@ -13,6 +13,7 @@ export interface Task {
   parallel?: boolean;
   depends_on?: string[];  // Names of tasks this task depends on
   health_check?: ServiceHealthCheck;
+  ports?: string[];  // Port bindings in format "hostPort:containerPort"
 }
 
 export interface Workflow {
@@ -33,7 +34,7 @@ export interface ExecutionContext {
   workflowName: string;
   env: Record<string, string>;
   cwd: string;
-  logger: typeof Logger;
+  logger: typeof logging;
   dryRun?: boolean;
 }
 

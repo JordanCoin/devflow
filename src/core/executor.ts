@@ -1,11 +1,9 @@
-import { spawn, ChildProcess } from 'child_process';
+import { spawn } from 'child_process';
 import Docker from 'dockerode';
-import { Task, ExecutionContext, RetryOptions, ServiceHealthCheck, Workflow } from '../types';
-import { Logger } from './logger';
-import { EnvLoader } from '../utils/env';
-import { HealthChecker } from '../utils/health';
-import { CleanupManager } from './cleanup';
-import { RetryError, TaskError, HealthCheckError } from '../utils/errors';
+import { Task, ExecutionContext, RetryOptions, Workflow } from '../types';
+import { sanitizeCommand, sanitizeEnv } from '../utils/security';
+import * as logging from '../utils/logging';
+import { RetryError } from '../utils/errors';
 
 export class TaskExecutor {
   private docker: Docker;
@@ -23,7 +21,7 @@ export class TaskExecutor {
   }
 
   async executeWorkflow(workflow: Workflow, context: ExecutionContext): Promise<boolean> {
-    Logger.info(`Starting workflow: ${workflow.name}`);
+    logging.info(`Starting workflow: ${workflow.name}`);
     
     if (workflow.parallel) {
       return this.executeParallelTasks(workflow.tasks, context);
@@ -83,7 +81,7 @@ export class TaskExecutor {
     });
 
     // Execute tasks that have no dependencies or all dependencies are met
-    const executeTasks = async () => {
+    const executeTasks = async (): Promise<boolean> => {
       const executableTasks: Promise<boolean>[] = [];
 
       for (const [taskName, dependencies] of dependencyGraph.entries()) {
@@ -105,7 +103,7 @@ export class TaskExecutor {
                 return success;
               })
               .catch(error => {
-                Logger.error(`Task ${taskName} failed: ${error.message}`);
+                logging.error(`Task ${taskName} failed: ${error.message}`);
                 return false;
               })
           );
@@ -145,49 +143,189 @@ export class TaskExecutor {
   }
 
   async executeTask(task: Task, context: ExecutionContext): Promise<boolean> {
-    Logger.info(`Starting task: ${task.name}`);
+    logging.info(`Starting task: ${task.name}`);
     
-    try {
-      if (context.dryRun) {
-        Logger.info(`[DRY RUN] Would execute task: ${task.name}`);
-        return true;
-      }
+    if (context.dryRun) {
+      logging.debug(`Dry run: ${JSON.stringify(task)}`);
+      return true;
+    }
 
-      // Load environment variables from file if specified
-      let taskEnv = task.env || {};
-      if (task.env_file) {
-        const fileEnv = EnvLoader.loadEnvFile(task.env_file);
-        taskEnv = EnvLoader.mergeEnv(taskEnv, fileEnv);
-      }
+    switch (task.type) {
+      case 'command':
+        return this.executeCommand(task, context);
+      case 'docker':
+        return this.executeDocker(task, context);
+      default:
+        logging.error(`Unknown task type: ${task.type}`);
+        return false;
+    }
+  }
 
-      switch (task.type) {
-        case 'command':
-          return await this.executeCommand(task, { ...context, env: taskEnv });
-        case 'docker':
-          return await this.executeDocker(task, { ...context, env: taskEnv });
-        default:
-          throw new TaskError(`Unknown task type: ${task.type}`, task);
-      }
-    } catch (err) {
-      // Type guard functions
-      const isTaskError = (e: unknown): e is TaskError => e instanceof TaskError;
-      const isRetryError = (e: unknown): e is RetryError => e instanceof RetryError;
-      const isHealthCheckError = (e: unknown): e is HealthCheckError => e instanceof HealthCheckError;
-
-      if (isTaskError(err)) {
-        Logger.error(`Task ${task.name} failed: ${err.message}`);
-        Logger.debug(`Task details: ${JSON.stringify(err.task)}`);
-      } else if (isRetryError(err)) {
-        Logger.error(`Task ${task.name} failed after ${err.attempts} attempts: ${err.message}`);
-      } else if (isHealthCheckError(err)) {
-        Logger.error(`Health check failed for ${task.name}: ${err.message}`);
-        Logger.debug(`Health check details: ${JSON.stringify(err.check)}`);
-      } else {
-        const error = err instanceof Error ? err : new Error(String(err));
-        Logger.error(`Task ${task.name} failed with unexpected error: ${error.message}`);
-      }
+  private async executeCommand(task: Task, context: ExecutionContext): Promise<boolean> {
+    if (!task.command) {
+      logging.error(`No command specified for task: ${task.name}`);
       return false;
     }
+
+    const sanitizedCommand = sanitizeCommand(task.command);
+    const sanitizedEnv = task.env ? sanitizeEnv(task.env) : {};
+
+    // Combine environment variables from context and task
+    const env = {
+      ...process.env,
+      ...context.env,
+      ...sanitizedEnv
+    };
+
+    return new Promise((resolve) => {
+      const parts = sanitizedCommand.split(/\s+/);
+      const cmd = parts[0];
+      const args = parts.slice(1);
+      
+      logging.startSpinner(`Running command: ${sanitizedCommand}`);
+      
+      const childProcess = spawn(cmd, args, {
+        env,
+        cwd: context.cwd,
+        shell: true,
+        stdio: 'pipe'
+      });
+
+      let stderrData = '';
+
+      childProcess.stdout.on('data', (data) => {
+        const chunk = data.toString();
+        logging.debug(chunk.trim());
+      });
+
+      childProcess.stderr.on('data', (data) => {
+        const chunk = data.toString();
+        stderrData += chunk;
+        logging.debug(chunk.trim());
+      });
+
+      childProcess.on('error', (error) => {
+        logging.stopSpinner(false);
+        logging.error(`Command failed to start: ${error.message}`);
+        resolve(false);
+      });
+
+      childProcess.on('close', (code) => {
+        const success = code === 0;
+        logging.stopSpinner(success);
+        
+        if (success) {
+          logging.success(`Command completed successfully: ${sanitizedCommand}`);
+        } else {
+          logging.error(`Command failed with exit code ${code}: ${sanitizedCommand}`);
+          if (stderrData) {
+            logging.error(`Error output: ${stderrData.trim()}`);
+          }
+        }
+        
+        resolve(success);
+      });
+    });
+  }
+
+  private async executeDocker(task: Task, context: ExecutionContext): Promise<boolean> {
+    if (!task.image) {
+      logging.error(`No image specified for docker task: ${task.name}`);
+      return false;
+    }
+
+    const containerName = task.container_name || `${context.config.project_name}-${task.name}`;
+    
+    // Combine environment variables
+    const sanitizedEnv = task.env ? sanitizeEnv(task.env) : {};
+    const env = Object.entries({
+      ...context.env,
+      ...sanitizedEnv
+    }).map(([key, value]) => `${key}=${value}`);
+
+    // Get port bindings if defined
+    const portBindings = this.getPortBindings(task);
+
+    try {
+      // Check if container already exists and remove it
+      logging.startSpinner(`Setting up container: ${containerName}`);
+      
+      try {
+        const container = await this.docker.getContainer(containerName);
+        const containerInfo = await container.inspect();
+        
+        if (containerInfo.State.Running) {
+          logging.info(`Stopping container: ${containerName}`);
+          await container.stop();
+        }
+        
+        logging.info(`Removing container: ${containerName}`);
+        await container.remove();
+      } catch (err) {
+        // Container doesn't exist, continue
+        const error = err instanceof Error ? err : new Error(String(err));
+        logging.debug(`Container does not exist yet: ${containerName} (${error.message})`);
+      }
+
+      // Create and start the container
+      logging.info(`Creating container: ${containerName} from image ${task.image}`);
+      
+      const createOptions: Docker.ContainerCreateOptions = {
+        Image: task.image,
+        name: containerName,
+        Env: env,
+        HostConfig: {
+          PortBindings: portBindings
+        },
+        ExposedPorts: this.getExposedPorts(task)
+      };
+
+      const container = await this.docker.createContainer(createOptions);
+      logging.info(`Starting container: ${containerName}`);
+      await container.start();
+      
+      logging.stopSpinner(true);
+      logging.success(`Container started: ${containerName}`);
+      
+      return true;
+    } catch (err) {
+      logging.stopSpinner(false);
+      const error = err instanceof Error ? err : new Error(String(err));
+      logging.error(`Failed to run docker container: ${error.message}`);
+      return false;
+    }
+  }
+
+  private getPortBindings(task: Task): Record<string, Array<{HostPort: string}>> {
+    const portBindings: Record<string, Array<{HostPort: string}>> = {};
+    
+    if (task.ports && task.ports.length > 0) {
+      task.ports.forEach(portStr => {
+        const [hostPort, containerPort] = portStr.split(':');
+        if (hostPort && containerPort) {
+          const containerPortWithProto = `${containerPort}/tcp`;
+          portBindings[containerPortWithProto] = [{ HostPort: hostPort }];
+        }
+      });
+    }
+    
+    return portBindings;
+  }
+
+  private getExposedPorts(task: Task): Record<string, Record<string, never>> {
+    const exposedPorts: Record<string, Record<string, never>> = {};
+    
+    if (task.ports && task.ports.length > 0) {
+      task.ports.forEach(portStr => {
+        const [, containerPort] = portStr.split(':');
+        if (containerPort) {
+          const containerPortWithProto = `${containerPort}/tcp`;
+          exposedPorts[containerPortWithProto] = {};
+        }
+      });
+    }
+    
+    return exposedPorts;
   }
 
   private async retryOperation<T>(
@@ -204,7 +342,7 @@ export class TaskExecutor {
         lastError = error instanceof Error ? error : new Error(String(error));
         if (attempt === options.attempts) break;
         
-        Logger.debug(`Attempt ${attempt} failed, retrying in ${delay}ms...`);
+        logging.debug(`Attempt ${attempt} failed, retrying in ${delay}ms...`);
         await new Promise(resolve => setTimeout(resolve, delay));
         delay = Math.min(delay * options.backoff.factor, options.backoff.maxDelay);
       }
@@ -215,134 +353,6 @@ export class TaskExecutor {
       options.attempts,
       lastError
     );
-  }
-
-  private async executeCommand(task: Task, context: ExecutionContext): Promise<boolean> {
-    if (!task.command) {
-      throw new TaskError('Command task requires command property', task);
-    }
-
-    const [cmd, ...args] = task.command.split(' ');
-
-    return new Promise((resolve, reject) => {
-      Logger.startSpinner(`Running command: ${task.command}`);
-      
-      const envVars = EnvLoader.mergeEnv(
-        process.env as Record<string, string>,
-        context.env,
-        task.env || {}
-      );
-      
-      const childProcess: ChildProcess = spawn(cmd, args, { 
-        env: envVars, 
-        shell: true 
-      });
-
-      if (childProcess.pid) {
-        CleanupManager.registerProcess(childProcess.pid);
-      }
-
-      let output = '';
-      let errorOutput = '';
-
-      childProcess.stdout?.on('data', (data: Buffer) => {
-        output += data.toString();
-        Logger.debug(data.toString());
-      });
-
-      childProcess.stderr?.on('data', (data: Buffer) => {
-        errorOutput += data.toString();
-        Logger.debug(data.toString());
-      });
-
-      childProcess.on('error', (error: Error) => {
-        Logger.stopSpinner(false);
-        reject(new TaskError(`Command failed to start: ${error.message}`, task));
-      });
-
-      childProcess.on('close', (code: number | null) => {
-        Logger.stopSpinner(code === 0);
-        if (code === 0) {
-          resolve(true);
-        } else {
-          reject(new TaskError(
-            `Command failed with exit code ${code}\nOutput: ${output}\nError: ${errorOutput}`,
-            task
-          ));
-        }
-      });
-    });
-  }
-
-  private async executeDocker(task: Task, context: ExecutionContext): Promise<boolean> {
-    if (!task.image) {
-      throw new TaskError('Docker task requires image property', task);
-    }
-
-    try {
-      Logger.startSpinner(`Starting container: ${task.container_name || task.image}`);
-      
-      // Pull image with retry
-      await this.retryOperation(async () => {
-        Logger.debug(`Pulling image: ${task.image}`);
-        await this.docker.pull(task.image as string);
-      });
-
-      // Create container
-      const container = await this.docker.createContainer({
-        Image: task.image,
-        name: task.container_name,
-        Env: this.formatEnvVars({ ...context.env, ...task.env }),
-        HostConfig: {
-          AutoRemove: true
-        }
-      });
-
-      CleanupManager.registerContainer(container.id);
-
-      // Start container with retry
-      await this.retryOperation(async () => {
-        Logger.debug(`Starting container: ${container.id}`);
-        await container.start();
-      });
-
-      // Enhanced health checks for different service types
-      if (task.type === 'docker' && task.container_name) {
-        const healthCheck: ServiceHealthCheck = {
-          type: this.determineHealthCheckType(task.image),
-          host: 'localhost',
-          port: this.getDefaultPort(task.image),
-          retries: 5,
-          interval: 2000,
-          timeout: 30000
-        };
-
-        const healthy = await this.retryOperation(
-          () => HealthChecker.waitForService(healthCheck),
-          {
-            attempts: healthCheck.retries,
-            backoff: {
-              initialDelay: healthCheck.interval,
-              maxDelay: 10000,
-              factor: 1.5
-            }
-          }
-        );
-
-        if (!healthy) {
-          throw new HealthCheckError(
-            `Container ${task.container_name} failed health check`,
-            healthCheck
-          );
-        }
-      }
-
-      Logger.stopSpinner(true);
-      return true;
-    } catch (error) {
-      Logger.stopSpinner(false);
-      throw error;
-    }
   }
 
   private determineHealthCheckType(image: string): 'tcp' | 'http' | 'custom' {

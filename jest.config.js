@@ -14,5 +14,24 @@ module.exports = {
     '^.+\\.tsx?$': ['ts-jest', {
       tsconfig: 'tsconfig.json'
     }]
-  }
+  },
+  collectCoverageFrom: [
+    'src/**/*.{js,ts}',
+    '!src/**/*.d.ts',
+    '!src/**/__tests__/**',
+    '!src/**/*.test.{js,ts}',
+    '!src/types/**',
+    '!src/**/index.{js,ts}',
+    '!src/templates/**'
+  ],
+  coverageThreshold: {
+    global: {
+      branches: 70,
+      functions: 75,
+      lines: 80,
+      statements: 80
+    }
+  },
+  coverageReporters: ['text', 'lcov', 'json', 'html'],
+  coverageDirectory: 'coverage'
 }; 

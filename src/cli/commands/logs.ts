@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { Logger } from '../../core/logger';
+import * as logging from '../../utils/logging';
 import { logsCommand as logsCommandImpl } from '../../commands/logs';
 import { LogOptions } from '../../types/docker';
 
@@ -15,7 +15,7 @@ export const logsCommand = new Command('logs')
       await logsCommandImpl(container, options);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
-      Logger.error(`Failed to stream logs: ${message}`);
+      logging.error(`Failed to stream logs: ${message}`);
       process.exit(1);
     }
   }); 

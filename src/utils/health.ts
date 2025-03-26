@@ -1,7 +1,7 @@
 import net from 'net';
 import http from 'http';
 import { ServiceHealthCheck } from '../types';
-import { Logger } from '../core/logger';
+import * as logging from './logging';
 
 export class HealthChecker {
   private static isTestMode = process.env.NODE_ENV === 'test';
@@ -13,7 +13,7 @@ export class HealthChecker {
     }
 
     try {
-      Logger.debug(`Checking health of service at ${check.host}:${check.port}`);
+      logging.debug(`Checking health of service at ${check.host}:${check.port}`);
       
       let isHealthy: boolean;
       
@@ -32,11 +32,11 @@ export class HealthChecker {
       }
 
       if (isHealthy) {
-        Logger.debug('Health check passed');
+        logging.debug('Health check passed');
         return true;
       }
     } catch (error) {
-      Logger.debug(`Health check failed: ${error instanceof Error ? error.message : String(error)}`);
+      logging.debug(`Health check failed: ${error instanceof Error ? error.message : String(error)}`);
     }
 
     return false;
@@ -47,7 +47,7 @@ export class HealthChecker {
       const socket = new net.Socket();
       let isResolved = false;
 
-      const cleanup = () => {
+      const cleanup = (): void => {
         if (!isResolved) {
           isResolved = true;
           socket.destroy();
@@ -81,7 +81,7 @@ export class HealthChecker {
       const url = `http://${check.host}:${check.port}${path}`;
       let isResolved = false;
 
-      const cleanup = () => {
+      const cleanup = (): void => {
         if (!isResolved) {
           isResolved = true;
         }

@@ -101,3 +101,78 @@ devflow test workflow --debug
    - Check environment variables
    - Test command manually
    - Review task dependencies 
+
+## Advanced Error Handling
+
+### Error Types & Reference
+
+DevFlow categorizes errors into the following types:
+
+1. **ConfigError**: Issues related to configuration parsing and validation
+2. **DockerError**: Problems with Docker operations and container management
+3. **TaskError**: Failures during task execution
+4. **SystemError**: Underlying system or environment issues
+
+### Programmatic Error Handling
+
+When using DevFlow as a library, errors can be caught and handled:
+
+```typescript
+import { runWorkflow } from 'devflow';
+
+try {
+  await runWorkflow('test', 'database');
+} catch (error) {
+  if (error.code === 'DOCKER_CONNECT_ERROR') {
+    console.error('Docker is not running. Please start Docker and try again.');
+  } else if (error.code === 'HEALTH_CHECK_TIMEOUT') {
+    console.error('Service failed to become healthy in the allotted time.');
+  } else {
+    console.error('An unexpected error occurred:', error.message);
+  }
+}
+```
+
+### Logging Levels
+
+DevFlow supports the following logging levels:
+
+- `error`: Only critical errors (default)
+- `warn`: Errors and warnings
+- `info`: Regular informational messages
+- `debug`: Detailed debugging information
+- `trace`: Very verbose tracing information
+
+Set the logging level with the `--log-level` flag:
+
+```bash
+devflow run workflow --log-level=debug
+```
+
+### Exit Codes
+
+| Code | Meaning                    |
+|------|-----------------------------|
+| 0    | Success                     |
+| 1    | General error               |
+| 2    | Configuration error         |
+| 3    | Docker error                |
+| 4    | Task execution error        |
+| 5    | Health check failure        |
+| 6    | Timeout error               |
+| 130  | Interrupted by user (SIGINT)|
+
+### Custom Error Handlers
+
+You can register custom error handlers in your configuration:
+
+```yaml
+error_handlers:
+  - type: slack
+    webhook: ${SLACK_WEBHOOK_URL}
+    channel: "#devflow-errors"
+  - type: email
+    recipients: 
+      - devops@example.com
+    subject: "DevFlow Error"
+``` 

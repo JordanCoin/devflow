@@ -1,18 +1,29 @@
 import { readFileSync } from 'fs';
 import { parse } from 'yaml';
 import { DevFlowConfig } from '../types';
-import { Logger } from '../core/logger';
+import * as logging from '../utils/logging';
+import * as fs from 'fs';
 
 export class ConfigLoader {
   static load(configPath: string): DevFlowConfig {
     try {
+      logging.info(`Loading configuration from ${configPath}`);
+      
+      // Check if the file exists
+      if (!fs.existsSync(configPath)) {
+        logging.error(`Configuration file '${configPath}' not found`);
+        process.exit(1);
+      }
+      
       const fileContents = readFileSync(configPath, 'utf8');
       const config = parse(fileContents) as DevFlowConfig;
       
+      logging.debug('Validating configuration');
       this.validateConfig(config);
+      logging.success('Configuration loaded successfully');
       return config;
     } catch (error) {
-      Logger.error(`Failed to load config: ${error instanceof Error ? error.message : String(error)}`);
+      logging.error(`Failed to load config: ${error instanceof Error ? error.message : String(error)}`);
       process.exit(1);
     }
   }

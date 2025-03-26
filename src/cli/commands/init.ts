@@ -1,10 +1,9 @@
 import { Command } from 'commander';
-import { Logger } from '../../core/logger';
+import * as logging from '../../utils/logging';
 import { ConfigManager } from '../../config/manager';
 import { TemplateManager } from '../../config/template';
 import { prompt } from 'inquirer';
 import { join } from 'path';
-import { DevFlowConfig } from '../../types/config';
 
 type TemplateKey = 'react-node-postgres' | 'react-node-postgres-test' | 'node-ci-pipeline' | 'node-microservices-dev' | 'microservices';
 
@@ -52,7 +51,7 @@ export const initCommand = new Command('init')
 
       // Check if config already exists
       if (configManager.exists() && !options.force) {
-        Logger.warn('DevFlow configuration already exists. Use --force to overwrite.');
+        logging.warn('DevFlow configuration already exists. Use --force to overwrite.');
         return;
       }
 
@@ -75,6 +74,8 @@ export const initCommand = new Command('init')
         }
       ]);
 
+      logging.startSpinner('Creating DevFlow configuration');
+      
       // Load and customize template
       const template = await templateManager.loadTemplate(
         join('workflows', TEMPLATES[answers.template].file)
@@ -85,15 +86,17 @@ export const initCommand = new Command('init')
 
       // Save configuration
       await configManager.save(template);
-
-      Logger.success('DevFlow configuration created successfully!');
-      Logger.info('\nNext steps:');
-      Logger.info('1. Review the generated devflow.yaml file');
-      Logger.info('2. Customize the configuration as needed');
-      Logger.info('3. Run your first workflow with: devflow test <workflow-name>');
+      
+      logging.stopSpinner(true);
+      logging.success('DevFlow configuration created successfully!');
+      logging.info('\nNext steps:');
+      logging.info('1. Review the generated devflow.yaml file');
+      logging.info('2. Customize the configuration as needed');
+      logging.info('3. Run your first workflow with: devflow test <workflow-name>');
     } catch (error) {
+      logging.stopSpinner(false);
       const message = error instanceof Error ? error.message : 'Unknown error';
-      Logger.error(`Failed to initialize DevFlow project: ${message}`);
+      logging.error(`Failed to initialize DevFlow project: ${message}`);
       process.exit(1);
     }
   }); 

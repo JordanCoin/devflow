@@ -2,11 +2,11 @@ import { Readable } from 'stream';
 import Docker from 'dockerode';
 import { logsCommand } from '../../commands/logs';
 import { CleanupManager } from '../../core/cleanup';
-import { Logger } from '../../core/logger';
+import * as logging from '../../utils/logging';
 
 jest.mock('dockerode');
 jest.mock('../../core/cleanup');
-jest.mock('../../core/logger');
+jest.mock('../../utils/logging');
 
 const MockDocker = Docker as jest.MockedClass<typeof Docker>;
 const MockCleanupManager = CleanupManager as jest.Mocked<typeof CleanupManager>;
@@ -75,7 +75,7 @@ describe('logsCommand', () => {
     mockStream.push(null);
 
     await commandPromise;
-    expect(Logger.info).toHaveBeenCalledWith('test message');
+    expect(logging.info).toHaveBeenCalledWith('test message');
   });
 
   it('should handle non-existent resources', async () => {
@@ -106,8 +106,8 @@ describe('logsCommand', () => {
     mockStream.push(null);
 
     await commandPromise;
-    expect(Logger.info).toHaveBeenCalledWith('error message');
-    expect(Logger.info).not.toHaveBeenCalledWith('normal message');
+    expect(logging.info).toHaveBeenCalledWith('error message');
+    expect(logging.info).not.toHaveBeenCalledWith('normal message');
   });
 
   it('should handle container inspection errors', async () => {
@@ -133,6 +133,6 @@ describe('logsCommand', () => {
     mockStream.push(null);
 
     await commandPromise;
-    expect(Logger.info).toHaveBeenCalledWith('test message');
+    expect(logging.info).toHaveBeenCalledWith('test message');
   });
 }); 

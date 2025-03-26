@@ -1,5 +1,5 @@
 import Docker from 'dockerode';
-import { Logger } from './logger';
+import * as logging from '../utils/logging';
 
 export interface Resource {
   id: string;
@@ -25,7 +25,7 @@ export class CleanupManager {
     process.on('SIGINT', () => this.triggerCleanup('SIGINT'));
     process.on('SIGTERM', () => this.triggerCleanup('SIGTERM'));
     process.on('uncaughtException', (error: Error) => {
-      Logger.error(`Uncaught exception: ${error.message}`);
+      logging.error(`Uncaught exception: ${error.message}`, error);
       this.triggerCleanup('uncaughtException');
     });
   }
@@ -50,7 +50,7 @@ export class CleanupManager {
     if (this.isShuttingDown) return;
     this.isShuttingDown = true;
 
-    Logger.info(`\nReceived ${signal}, cleaning up...`);
+    logging.info(`\nReceived ${signal}, cleaning up...`);
 
     // Create a copy of the resources array before reversing
     const resourcesToCleanup = [...this.resources].reverse();
@@ -64,7 +64,7 @@ export class CleanupManager {
             : this.cleanupProcess(resource.id)
         )
       ).then(() => {
-        Logger.success('Cleanup completed');
+        logging.info('Cleanup completed');
         if (this.shouldExit) {
           process.exit(0);
         }
@@ -73,7 +73,7 @@ export class CleanupManager {
       await this.cleanupPromise;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      Logger.error(`Cleanup failed: ${errorMessage}`);
+      logging.error(`Cleanup failed: ${errorMessage}`);
       if (this.shouldExit) {
         process.exit(1);
       }
@@ -86,19 +86,19 @@ export class CleanupManager {
       const containerInfo = await container.inspect();
       if (containerInfo.State?.Running) {
         await container.stop();
-        Logger.success(`Stopped container ${containerId}`);
+        logging.info(`Stopped container ${containerId}`);
       } else {
-        Logger.warn(`Container ${containerId} is not running`);
+        logging.warn(`Container ${containerId} is not running`);
       }
       await container.remove();
-      Logger.success(`Removed container ${containerId}`);
+      logging.info(`Removed container ${containerId}`);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       if (errorMessage.includes('no such container')) {
-        Logger.warn(`Container ${containerId} does not exist`);
+        logging.warn(`Container ${containerId} does not exist`);
         return;
       }
-      Logger.error(`Failed to cleanup container ${containerId}: ${errorMessage}`);
+      logging.error(`Failed to cleanup container ${containerId}: ${errorMessage}`);
       throw error;
     }
   }
@@ -111,11 +111,11 @@ export class CleanupManager {
       try {
         // Then attempt to terminate it with default signal (SIGTERM)
         process.kill(pid);
-        Logger.success(`Terminated process ${processId}`);
+        logging.info(`Terminated process ${processId}`);
       } catch (killError) {
         // If kill fails with ESRCH, process doesn't exist anymore
         if (killError instanceof Error && 'code' in killError && killError.code === 'ESRCH') {
-          Logger.warn(`Process ${processId} not found during termination`);
+          logging.warn(`Process ${processId} not found during termination`);
           return;
         }
         throw killError;
@@ -123,11 +123,11 @@ export class CleanupManager {
     } catch (checkError) {
       // If existence check fails with ESRCH, process doesn't exist
       if (checkError instanceof Error && 'code' in checkError && checkError.code === 'ESRCH') {
-        Logger.warn(`Process ${processId} not found`);
+        logging.warn(`Process ${processId} not found`);
         return;
       }
       const errorMessage = checkError instanceof Error ? checkError.message : String(checkError);
-      Logger.error(`Failed to terminate process ${processId}: ${errorMessage}`);
+      logging.error(`Failed to terminate process ${processId}: ${errorMessage}`);
       throw checkError;
     }
   }

@@ -13,6 +13,9 @@ build/
 .env
 .env.local
 .env.*.local
+.npmrc.local
+.npmrc.user
+.npm-token
 
 # IDE and editor files
 .idea/

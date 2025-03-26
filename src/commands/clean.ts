@@ -1,4 +1,4 @@
-import { Logger } from '../core/logger';
+import * as logging from '../utils/logging';
 import { CleanupManager } from '../core/cleanup';
 
 interface CleanOptions {
@@ -8,16 +8,20 @@ interface CleanOptions {
 export async function cleanCommand(options: CleanOptions = {}): Promise<void> {
   try {
     if (!options.force) {
-      Logger.warn('This will stop and remove all DevFlow managed resources.');
-      Logger.warn('Use --force to skip this warning.');
+      logging.warn('This will stop and remove all DevFlow managed resources.');
+      logging.warn('Use --force to skip this warning.');
       // In a real CLI we would prompt for confirmation here
     }
 
-    Logger.info('Cleaning up resources...');
+    logging.startSpinner('Cleaning up resources...');
     await CleanupManager.triggerCleanup('manual');
-    Logger.success('Cleanup completed successfully');
+    logging.stopSpinner(true);
+    logging.success('Cleanup completed successfully');
   } catch (error) {
-    Logger.error(`Cleanup failed: ${error instanceof Error ? error.message : String(error)}`);
+    if (options.force) {
+      logging.stopSpinner(false);
+    }
+    logging.error(`Cleanup failed: ${error instanceof Error ? error.message : String(error)}`);
     process.exit(1);
   }
 } 

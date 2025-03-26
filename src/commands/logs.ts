@@ -1,6 +1,6 @@
 import { Container } from 'dockerode';
 import { Readable } from 'stream';
-import { Logger } from '../core/logger';
+import * as logging from '../utils/logging';
 import { CleanupManager } from '../core/cleanup';
 import Docker from 'dockerode';
 
@@ -60,13 +60,13 @@ export class LogStreamer {
           stdout: true,
           stderr: true,
           timestamps: this.options.timestamps ?? false
-        } as any)) as unknown as Readable
+        }) as unknown as Readable)
       : (await this.container.logs({
           follow: false,
           stdout: true,
           stderr: true,
           timestamps: this.options.timestamps ?? false
-        } as any)) as unknown as Readable;
+        }) as unknown as Readable);
 
     return new Promise((resolve, reject) => {
       stream.on('data', (chunk: Buffer) => {
@@ -97,7 +97,7 @@ export class LogStreamer {
     }
   }
 
-  async getContainerInfo() {
+  async getContainerInfo(): Promise<{ name: string; id: string }> {
     const info = await this.container.inspect();
     return {
       name: info.Name.replace(/^\//, ''),
@@ -125,7 +125,7 @@ export async function logsCommand(resourceName: string, options: LogOptions = {}
     const streamer = new LogStreamer(container, options);
 
     const { name, id } = await streamer.getContainerInfo();
-    Logger.info(`Showing logs for container ${name} (${id})`);
+    logging.info(`Showing logs for container ${name} (${id})`);
 
     if (!options.testing) {
       process.on('SIGINT', () => {
@@ -134,17 +134,23 @@ export async function logsCommand(resourceName: string, options: LogOptions = {}
       });
     }
 
+    logging.startSpinner(`Streaming logs from ${name}`);
+    
     await streamer.streamLogs((line: LogLine) => {
       if (line.isError) {
-        Logger.error(line.message);
+        logging.error(line.message);
       } else {
-        Logger.info(line.message);
+        logging.info(line.message);
       }
     });
+    
+    logging.stopSpinner(true);
+    logging.success('Log streaming completed');
 
   } catch (error: unknown) {
     if (!options.testing) {
-      Logger.error(`Failed to stream logs: ${error instanceof Error ? error.message : String(error)}`);
+      logging.stopSpinner(false);
+      logging.error(`Failed to stream logs: ${error instanceof Error ? error.message : String(error)}`);
       process.exit(1);
     }
     throw error;

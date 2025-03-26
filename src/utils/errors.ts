@@ -29,4 +29,14 @@ export class HealthCheckError extends Error {
     super(message);
     this.name = 'HealthCheckError';
   }
+}
+
+export class SecurityError extends Error {
+  constructor(
+    message: string,
+    public readonly task: Task
+  ) {
+    super(message);
+    this.name = 'SecurityError';
+  }
 } 

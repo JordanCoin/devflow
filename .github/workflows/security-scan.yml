@@ -1,0 +1,187 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: '0 0 * * 1'  # Run every Monday at midnight
+
+jobs:
+  dependency-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v3
+        with:
+          fail-on-severity: high
+          deny-licenses: AGPL-1.0-only, AGPL-1.0-or-later, AGPL-3.0-only, AGPL-3.0-or-later
+          base-ref: ${{ github.event.pull_request.base.sha || 'main~1' }}
+          head-ref: ${{ github.sha }}
+
+  code-scanning:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    strategy:
+      fail-fast: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v2
+        with:
+          languages: javascript, typescript
+          queries: security-extended, security-and-quality
+          
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Build
+        run: npm run build
+        
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v2
+
+  secret-scanning:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Find secrets with Trufflehog
+        uses: trufflesecurity/trufflehog-actions-scan@v1.0.8
+        with:
+          path: ./
+          base: ${{ github.event.pull_request.base.sha || 'HEAD~1' }}
+          head: ${{ github.sha }}
+          extra_args: --debug --only-verified
+
+  container-scanning:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        
+      - name: Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  npm-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Run npm audit
+        run: npm audit --json > npm-audit.json || true
+        
+      - name: Upload npm audit results
+        uses: actions/upload-artifact@v3
+        with:
+          name: npm-audit-results
+          path: npm-audit.json
+          retention-days: 7
+          
+      - name: Check for critical vulnerabilities
+        run: |
+          if cat npm-audit.json | grep -q '"severity":"critical"'; then
+            echo "Critical vulnerabilities found!"
+            exit 1
+          fi
+
+  dependency-confusion-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Verify scoped packages
+        run: |
+          echo "Checking for dependency confusion vulnerabilities..."
+          # Verify all packages are properly scoped
+          if grep -q '"dependencies":\s*{' package.json && ! grep -q '"@jordanjackson/' package.json; then
+            echo "::error::Found non-scoped packages in dependencies. All packages should use @jordanjackson scope to prevent dependency confusion."
+            exit 1
+          fi
+          
+          # Check for any unscoped in-house dependencies
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            const deps = {...pkg.dependencies || {}, ...pkg.devDependencies || {}};
+            const unscoped = Object.keys(deps).filter(d => !d.startsWith('@') && !d.includes('/'));
+            if (unscoped.length > 0) {
+              console.log('Warning: Found unscoped packages that could be vulnerable to dependency confusion:');
+              unscoped.forEach(p => console.log(` - ${p}`));
+              console.log('Consider using scoped packages (@jordanjackson/*) for all dependencies.');
+            } else {
+              console.log('All dependencies are properly scoped. Good job!');
+            }
+          "
+      
+      - name: Run dependency confusion check script
+        run: node scripts/security-check.js
+
+  custom-security-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Run security checks
+        run: node scripts/security-check.js 

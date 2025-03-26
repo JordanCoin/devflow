@@ -1,0 +1,47 @@
+version: 2
+updates:
+  # Enable version updates for npm
+  - package-ecosystem: "npm"
+    # Look for package.json and package-lock.json files in the root directory
+    directory: "/"
+    # Check for updates once a week
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    # Group all updates together
+    groups:
+      development-dependencies:
+        dependency-type: "development"
+      production-dependencies:
+        dependency-type: "production"
+    # Specify labels for pull requests
+    labels:
+      - "dependencies"
+      - "security"
+    # Limit the number of open PRs
+    open-pull-requests-limit: 10
+    # Configure security updates
+    security-updates-only: false
+    # Add reviewers
+    reviewers:
+      - "jordanjackson"
+    # Configure commit message
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    # Assign vulnerabilities to security team
+    assignees:
+      - "jordanjackson"
+      
+  # Enable version updates for GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "ci"
+      include: "scope" 
