@@ -1,64 +1,53 @@
-import inquirer from 'inquirer';
-import { Logger } from '../core/logger';
-import { DevFlowConfig, TaskType, Workflow, Task } from '../types';
-import { writeFileSync } from 'fs';
+import { writeFile } from 'fs/promises';
+import { join } from 'path';
+import { DevFlowError } from '../core/errors';
+import { logger } from '../utils/logger';
 
-export async function initCommand(): Promise<void> {
-  const answers = await inquirer.prompt([
-    {
-      type: 'input',
-      name: 'project_name',
-      message: 'What is your project name?',
-      default: 'my-project'
-    },
-    {
-      type: 'input',
-      name: 'workflow_name',
-      message: 'What would you like to name your first workflow?',
-      default: 'test'
-    }
-  ]);
-
-  const task: Task = {
-    name: 'Example Task',
-    type: 'command' as TaskType,
-    command: 'echo "Hello World"'
-  };
-
-  const workflow: Workflow = {
-    name: answers.workflow_name,
-    description: 'Initial workflow',
-    tasks: [task]
-  };
-
-  const config: DevFlowConfig = {
-    project_name: answers.project_name,
-    version: '1.0.0',
-    workflows: {
-      [answers.workflow_name]: workflow
-    }
-  };
-
-  const yaml = generateYaml(config);
-  writeFileSync('devflow.yaml', yaml);
-  Logger.success('Created devflow.yaml');
+interface InitOptions {
+  type: 'monorepo' | 'single';
 }
 
-function generateYaml(config: DevFlowConfig): string {
-  const workflow = config.workflows[Object.keys(config.workflows)[0]];
-  const task = workflow.tasks[0];
-  
-  return `# DevFlow Configuration
-project_name: ${config.project_name}
-version: ${config.version}
+const defaultConfig = {
+  single: {
+    project_name: '',
+    version: '1.0.0',
+    workflows: {
+      test: {
+        name: 'Integration Tests',
+        tasks: []
+      }
+    }
+  },
+  monorepo: {
+    project_name: '',
+    version: '1.0.0',
+    packages: [],
+    workflows: {
+      test: {
+        name: 'Integration Tests',
+        tasks: []
+      }
+    }
+  }
+};
 
-workflows:
-  ${workflow.name}:
-    name: ${workflow.name}
-    description: ${workflow.description}
-    tasks:
-      - name: ${task.name}
-        type: ${task.type}
-        command: ${task.command}
-`;
+export async function initializeProject(options: InitOptions): Promise<void> {
+  try {
+    const config = defaultConfig[options.type];
+    config.project_name = process.cwd().split('/').pop() || 'devflow-project';
+
+    await writeFile(
+      join(process.cwd(), 'devflow.yaml'),
+      JSON.stringify(config, null, 2)
+    );
+
+    logger.success('Initialized DevFlow project');
+    logger.info('Edit devflow.yaml to configure your workflows');
+  } catch (error) {
+    throw new DevFlowError(
+      'Failed to initialize project',
+      'INIT_FAILED',
+      ['Check file permissions', 'Verify project directory is writable']
+    );
+  }
 } 
