@@ -35,6 +35,7 @@ devflow test test_db --env development --parallel
 - 📝 Flexible YAML configuration
 - ⚡ Parallel task execution
 - 🔒 Improved permission handling
+- 🤖 LLM-friendly summaries for CLI agents
 
 ## 📖 Project Structure Support
 
@@ -233,6 +234,20 @@ This checks for:
 - Known malicious packages
 - Dependency confusion vulnerabilities
 - Package integrity issues
+
+## 🤖 LLM-Friendly Usage
+
+DevFlow can surface project context that is easy for CLI-based LLM agents to consume:
+
+```bash
+# Emit a structured JSON summary of workflows and tasks
+devflow llm --format json
+
+# Use a custom configuration path
+devflow llm --config ./configs/devflow.yaml
+```
+
+The `llm` command exposes workflow names, tasks, dependencies, and helpful tips so automated agents can plan reliable executions.
 
 ---
 

@@ -11,6 +11,7 @@ import { join } from 'path';
 import { initializeProject } from './commands/init';
 import { runWorkflow } from './commands/workflow';
 import { cleanupResources } from './commands/cleanup';
+import { generateLLMGuide } from './commands/llm';
 
 interface PackageJson {
   version: string;
@@ -61,6 +62,15 @@ async function main() {
       .description('Detect services in project')
       .action(async () => {
         await detectServices();
+      });
+
+    program
+      .command('llm')
+      .description('Generate LLM-friendly context for the current project')
+      .option('-c, --config <path>', 'Path to devflow.yaml', 'devflow.yaml')
+      .option('-f, --format <format>', 'Output format (text/json)', 'text')
+      .action(async (options: { config?: string; format?: 'text' | 'json' }) => {
+        await generateLLMGuide(options);
       });
 
     await program.parseAsync(process.argv);
